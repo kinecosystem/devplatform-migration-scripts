@@ -62,7 +62,7 @@ builder.update_sequence()
 builder.append_change_trust_op('KIN', issuer, str(balance*100), source=kin_address)
 # Set both signers weight to 0
 builder.append_set_options_op(master_weight=0,
-                              signer_type='ed25519',
+                              signer_type='ed25519PublicKey',
                               signer_address=keypair.public_address,
                               signer_weight=0,
                               source=kin_address)
