@@ -1,3 +1,4 @@
+import sys
 import kin
 import requests
 
@@ -57,7 +58,7 @@ balance = get_kin_balance(client, account.get_public_address(), issuer)
 builder = account.get_transaction_builder(100)
 builder.update_sequence()
 # Balance * 100 cause of the decimal points changes
-builder.append_change_trust_op('KIN',issuer,str(balance*100))
+builder.append_change_trust_op('KIN', issuer, str(balance*100))
 builder.append_set_options_op(master_weight=0)
 builder.sign()
 try:
@@ -73,5 +74,6 @@ if response.ok:
 else:
     print('Failed migration')
     print(response.text)
+    sys.exit(1)
 
 
