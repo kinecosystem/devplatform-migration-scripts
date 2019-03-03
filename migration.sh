@@ -49,70 +49,109 @@ python3 verify_whitelist.py $APP_SEED
 
 #################################################
 
-echo "****Connecting to database and creating users csv file****"
+function GetCsv {
+  echo "****Connecting to database and creating users csv file****"
 
-SQLCMD="\"\copy (select wallet_address, False as created, row_number() over() -1 as row from users where app_id='$APP_ID') to '/home/ubuntu/$APP_ID' with csv;\""
+  SQLCMD="\"\copy (select wallet_address, False as created, row_number() over() -1 as row from users where app_id='$APP_ID') to '/home/ubuntu/$APP_ID' with csv;\""
 
-ssh marketplace-1 "psql $DB_CONNECTION -c $SQLCMD"
+  ssh marketplace-1 "psql $DB_CONNECTION -c $SQLCMD"
 
-echo "****Copying csv file to local pc****"
-scp marketplace-1:/home/ubuntu/$APP_ID $HOME
+  echo "****Copying csv file to local pc****"
+  scp marketplace-1:/home/ubuntu/$APP_ID $HOME
+}
+
+while true; do
+    read -p "Get users csv from database? <yes/no>: " yn
+    case $yn in
+        yes) GetCsv && break;;
+        no) break;;
+        * ) echo "Please type 'yes' or 'no'.";;
+    esac
+done
 
 ##################################################
-echo "****Setting up local database****"
-sudo docker run -d -p 5432:5432 postgres
-sleep 10
-LOCAL_DB="postgresql://postgres:postgres@localhost:5432"
-psql $LOCAL_DB -c "create table accounts(address varchar(56), created boolean, index int primary key);"
-psql $LOCAL_DB -c "\copy accounts FROM '$HOME/$APP_ID' WITH (FORMAT csv);"
+
+function LocalDB {
+  echo "****Setting up local database****"
+  sudo docker run -d -p 5432:5432 postgres
+  sleep 10
+  LOCAL_DB="postgresql://postgres:postgres@localhost:5432"
+  psql $LOCAL_DB -c "create table accounts(address varchar(56), created boolean, index int primary key);"
+  psql $LOCAL_DB -c "\copy accounts FROM '$HOME/$APP_ID' WITH (FORMAT csv);"
+}
+
+while true; do
+    read -p "Create local db? <yes/no>: " yn
+    case $yn in
+        yes) LocalDB && break;;
+        no) break;;
+        * ) echo "Please type 'yes' or 'no'.";;
+    esac
+done
 
 ###################################################
 
-echo "****Creating the accounts****"
-if [ ! -d "$(pwd)/mass-account-creator" ]
-then
-  git clone git@github.com:kinecosystem/mass-account-creator.git
-fi
-cd mass-account-creator
-git pull
-pipenv install
-sed -i -e "s/seed_here/$SEED/g" config.py
-pipenv run python main.py
-
-#####################################################
+function CreateAccounts {
+  echo "****Creating the accounts****"
+  if [ ! -d "$(pwd)/mass-account-creator" ]
+  then
+    git clone git@github.com:kinecosystem/mass-account-creator.git
+  fi
+  cd mass-account-creator
+  git pull
+  pipenv install
+  sed -i -e "s/seed_here/$SEED/g" config.py
+  pipenv run python main.py
+}
 
 while true; do
-    read -p "****Type 'switch' to turn the killswitch, or 'stop' to stop: ****" yn
+    read -p "Try to create the accounts? <yes/no>: " yn
     case $yn in
-        switch) break;;
-        stop) exit 0;;
-        * ) echo "****Please type switch or stop.****";;
+        yes) CreateAccounts;; # Will loop, allow for retries until you choose no
+        no) break;;
+        * ) echo "Please type 'yes' or 'no'.";;
+    esac
+done
+#####################################################
+
+
+function KillSwitch {
+  echo "****Funding hot wallet with initial amount on the new blockchain****"
+  cd ..
+  python3 fund_hot.py $APP_SEED $SEED
+  echo "****Turning on killswitch****"
+  scp ./killswitch.sh marketplace-1:/home/ubuntu/killswitch.sh
+  ssh marketplace-1 ./killswitch.sh $DB_CONNECTION 3 $APP_ID
+}
+
+while true; do
+    read -p "****Type 'switch' to turn the killswitch, or 'skip' to skip: ****" yn
+    case $yn in
+        switch) KillSwitch && break;;
+        skip) break;;
+        * ) echo "****Please type switch or skip.****";;
     esac
 done
 
-echo "****Funding hot wallet with initial amount on the new blockchain****"
-cd ..
-python3 fund_hot.py $APP_SEED $SEED
-echo "****Turning on killswitch****"
-scp ./killswitch.sh marketplace-1:/home/ubuntu/killswitch.sh
-ssh marketplace-1 ./killswitch.sh $DB_CONNECTION 3 $APP_ID
-
 #####################################################
 
+function Burn {
+  echo "****Burning the app wallet****"
+  echo "****There is no need to input anything in the following prompt...****"
+  sleep 3
+  printf "1\n$APP_SEED" | python3 cold_wallet.py  # Run the burn+migrate script on production
+}
+
+
 while true; do
-    read -p "Type 'burn' to burn the account, or 'revert' to revert kill switch: " yn
+    read -p "Type 'burn' to burn the account, or 'revert' to revert kill switch or stop: " yn
     case $yn in
-        burn) break;;
-        revert) ssh marketplace-1 ./killswitch.sh $DB_CONNECTION 2 $APP_ID; exit 0;;
-        * ) echo "Please type burn or revert.";;
+        burn) Burn && break;;
+        revert) ssh marketplace-1 ./killswitch.sh $DB_CONNECTION 2 $APP_ID && exit 0;;
+        stop) break;;
+        * ) echo "Please type burn/revert/stop.";;
     esac
 done
-
-echo "****Burning the app wallet****"
-echo "****There is no need to input anything in the following prompt...****"
-sleep 3
-printf "1\n$APP_SEED" | python3 cold_wallet.py  # Run the burn+migrate script on production
-
 
 echo "****Done!****"
 
