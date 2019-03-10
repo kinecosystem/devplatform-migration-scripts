@@ -113,7 +113,7 @@ function CreateAccounts {
 while true; do
     read -p "Try to create the accounts? <yes/no>: " yn
     case $yn in
-        yes) CreateAccounts;; # Will loop, allow for retries until you choose no
+        yes) cd $CURRENT_DIR && CreateAccounts;; # Will loop, allow for retries until you choose no
         no) break;;
         * ) echo "Please type 'yes' or 'no'.";;
     esac
@@ -124,7 +124,6 @@ function FundHot {
   echo "****Funding hot wallet with initial amount on the new blockchain****"
   cd CURRENT_DIR
   python3 fund_hot.py $APP_SEED $SEED 1000000
-  cd -
 }
 
 while true; do
