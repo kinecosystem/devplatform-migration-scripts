@@ -54,7 +54,10 @@ function GetCsv {
   echo "****Connecting to database and creating users csv file****"
 
   read -p "Enter the initial date to get users from (in this format 2018-10-14 15:40:27.304):  " CREATED_DATE
-  SQLCMD="\"\copy (select distinct(wallet_address), False as created, row_number() over() -1 as row from users where app_id='$APP_ID' and created_date > '$CREATED_DATE') to '/home/ubuntu/$APP_ID' with csv;\""
+  SQLCMD="\"\copy 
+  (select wallet_address, False as created, row_number() over() -1 as row from 
+  (select distinct(wallet_address), created_date from users where app_id='$APP_ID') as addresses 
+  where created_date > '$CREATED_DATE') to '/home/ubuntu/$APP_ID' with csv;\""
 
   ssh marketplace-1 "psql $DB_CONNECTION -c $SQLCMD"
 
@@ -142,7 +145,7 @@ function KillSwitch {
 }
 
 while true; do
-    read -p "****Type 'switch' to turn the killswitch, or 'skip' to skip: ****" yn
+    read -p "Type 'switch' to turn the killswitch, or 'skip' to skip: " yn
     case $yn in
         switch) KillSwitch && break;;
         skip) break;;
