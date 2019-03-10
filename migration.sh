@@ -11,6 +11,8 @@ then
   exit 1
 fi
 
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 read -p "Enter the app id: " APP_ID
 read -p "Enter the db connection string: " DB_CONNECTION
 read -p "Enter the account creation seed (Our Root wallet): "  SEED
@@ -52,7 +54,7 @@ python3 verify_whitelist.py $APP_SEED
 function GetCsv {
   echo "****Connecting to database and creating users csv file****"
 
-  SQLCMD="\"\copy (select wallet_address, False as created, row_number() over() -1 as row from users where app_id='$APP_ID') to '/home/ubuntu/$APP_ID' with csv;\""
+  SQLCMD="\"\copy (select distinct(wallet_address), False as created, row_number() over() -1 as row from users where app_id='$APP_ID') to '/home/ubuntu/$APP_ID' with csv;\""
 
   ssh marketplace-1 "psql $DB_CONNECTION -c $SQLCMD"
 
@@ -114,11 +116,25 @@ while true; do
 done
 #####################################################
 
+function FundHot{
+  echo "****Funding hot wallet with initial amount on the new blockchain****"
+  cd CURRENT_DIR
+  python3 fund_hot.py $APP_SEED $SEED 1000000
+  cd -
+}
+
+while true; do
+    read -p "Fund hot wallet? <yes/no>: " yn
+    case $yn in
+        yes) FundHot && break ;;
+        no) break;;
+        * ) echo "Please type 'yes' or 'no'.";;
+    esac
+done
+
+#####################################################
 
 function KillSwitch {
-  echo "****Funding hot wallet with initial amount on the new blockchain****"
-  cd ..
-  python3 fund_hot.py $APP_SEED $SEED
   echo "****Turning on killswitch****"
   scp ./killswitch.sh marketplace-1:/home/ubuntu/killswitch.sh
   ssh marketplace-1 ./killswitch.sh $DB_CONNECTION 3 $APP_ID
