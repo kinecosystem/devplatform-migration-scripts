@@ -50,14 +50,15 @@ fi
 python3 verify_whitelist.py $APP_SEED
 
 #################################################
-
 function GetCsv {
   echo "****Connecting to database and creating users csv file****"
 
-  SQLCMD="\"\copy (select distinct(wallet_address), False as created, row_number() over() -1 as row from users where app_id='$APP_ID') to '/home/ubuntu/$APP_ID' with csv;\""
+  read -p "Enter the initial date to get users from (in this format 2018-10-14 15:40:27.304):  " CREATED_DATE
+  SQLCMD="\"\copy (select distinct(wallet_address), False as created, row_number() over() -1 as row from users where app_id='$APP_ID' and created_date > '$CREATED_DATE') to '/home/ubuntu/$APP_ID' with csv;\""
 
   ssh marketplace-1 "psql $DB_CONNECTION -c $SQLCMD"
 
+  echo "***Current time is: $(date -u --rfc-3339=seconds | cut -c1-19)***"
   echo "****Copying csv file to local pc****"
   scp marketplace-1:/home/ubuntu/$APP_ID $HOME
 }
@@ -116,7 +117,7 @@ while true; do
 done
 #####################################################
 
-function FundHot{
+function FundHot {
   echo "****Funding hot wallet with initial amount on the new blockchain****"
   cd CURRENT_DIR
   python3 fund_hot.py $APP_SEED $SEED 1000000
