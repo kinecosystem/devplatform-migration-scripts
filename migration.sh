@@ -11,6 +11,8 @@ then
   exit 1
 fi
 
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 read -p "Enter the app id: " APP_ID
 read -p "Enter the db connection string: " DB_CONNECTION
 read -p "Enter the account creation seed (Our Root wallet): "  SEED
@@ -48,14 +50,18 @@ fi
 python3 verify_whitelist.py $APP_SEED
 
 #################################################
-
 function GetCsv {
   echo "****Connecting to database and creating users csv file****"
 
-  SQLCMD="\"\copy (select wallet_address, False as created, row_number() over() -1 as row from users where app_id='$APP_ID') to '/home/ubuntu/$APP_ID' with csv;\""
+  read -p "Enter the initial date to get users from (in this format 2018-10-14 15:40:27.304):  " CREATED_DATE
+  SQLCMD="\"\copy 
+  (select wallet_address, False as created, row_number() over() -1 as row from 
+  (select distinct(wallet_address), created_date from users where app_id='$APP_ID') as addresses 
+  where created_date > '$CREATED_DATE') to '/home/ubuntu/$APP_ID' with csv;\""
 
   ssh marketplace-1 "psql $DB_CONNECTION -c $SQLCMD"
 
+  echo "***Current time is: $(date -u --rfc-3339=seconds | cut -c1-19)***"
   echo "****Copying csv file to local pc****"
   scp marketplace-1:/home/ubuntu/$APP_ID $HOME
 }
@@ -107,25 +113,38 @@ function CreateAccounts {
 while true; do
     read -p "Try to create the accounts? <yes/no>: " yn
     case $yn in
-        yes) CreateAccounts;; # Will loop, allow for retries until you choose no
+        yes) cd $CURRENT_DIR && CreateAccounts;; # Will loop, allow for retries until you choose no
         no) break;;
         * ) echo "Please type 'yes' or 'no'.";;
     esac
 done
 #####################################################
 
+function FundHot {
+  echo "****Funding hot wallet with initial amount on the new blockchain****"
+  cd CURRENT_DIR
+  python3 fund_hot.py $APP_SEED $SEED 1000000
+}
+
+while true; do
+    read -p "Fund hot wallet? <yes/no>: " yn
+    case $yn in
+        yes) FundHot && break ;;
+        no) break;;
+        * ) echo "Please type 'yes' or 'no'.";;
+    esac
+done
+
+#####################################################
 
 function KillSwitch {
-  echo "****Funding hot wallet with initial amount on the new blockchain****"
-  cd ..
-  python3 fund_hot.py $APP_SEED $SEED
   echo "****Turning on killswitch****"
   scp ./killswitch.sh marketplace-1:/home/ubuntu/killswitch.sh
   ssh marketplace-1 ./killswitch.sh $DB_CONNECTION 3 $APP_ID
 }
 
 while true; do
-    read -p "****Type 'switch' to turn the killswitch, or 'skip' to skip: ****" yn
+    read -p "Type 'switch' to turn the killswitch, or 'skip' to skip: " yn
     case $yn in
         switch) KillSwitch && break;;
         skip) break;;
