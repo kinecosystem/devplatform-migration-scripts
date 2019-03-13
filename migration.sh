@@ -122,7 +122,7 @@ done
 
 function FundHot {
   echo "****Funding hot wallet with initial amount on the new blockchain****"
-  cd CURRENT_DIR
+  cd $CURRENT_DIR
   python3 fund_hot.py $APP_SEED $SEED 1000000
 }
 
