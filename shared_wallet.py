@@ -73,7 +73,7 @@ try:
 except Exception as e:
     print('Failed', e)
 
-response = requests.post(migration_endpoint+'/migrate?address=' + account.get_public_address())
+response = requests.post(migration_endpoint+'/migrate?address=' + kin_address)
 if response.ok:
     print('Done')
 
